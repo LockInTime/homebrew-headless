@@ -54,6 +54,8 @@ printf '%s\n' "$CODESIGN_DETAILS" | grep -q '^Authority=Developer ID Application
   || { echo "Homebrew update: app is not Developer ID signed" >&2; exit 65; }
 printf '%s\n' "$CODESIGN_DETAILS" | grep -q 'flags=.*runtime' \
   || { echo "Homebrew update: hardened runtime is missing" >&2; exit 65; }
+printf '%s\n' "$CODESIGN_DETAILS" | grep -q '^Timestamp=' \
+  || { echo "Homebrew update: secure timestamp is missing" >&2; exit 65; }
 for executable in \
   "$APP/Contents/MacOS/Headless" \
   "$APP/Contents/Resources/bin/headless" \
@@ -63,6 +65,14 @@ for executable in \
     printf '%s\n' "$ARCHITECTURES" | grep -Eq "(^| )$architecture( |$)" \
       || { echo "Homebrew update: $executable is missing $architecture" >&2; exit 65; }
   done
+  codesign --verify --strict "$executable"
+  EXECUTABLE_SIGNATURE="$(codesign --display --verbose=4 "$executable" 2>&1)"
+  printf '%s\n' "$EXECUTABLE_SIGNATURE" | grep -q '^Authority=Developer ID Application:' \
+    || { echo "Homebrew update: $executable is not Developer ID signed" >&2; exit 65; }
+  printf '%s\n' "$EXECUTABLE_SIGNATURE" | grep -q 'flags=.*runtime' \
+    || { echo "Homebrew update: $executable lacks hardened runtime" >&2; exit 65; }
+  printf '%s\n' "$EXECUTABLE_SIGNATURE" | grep -q '^Timestamp=' \
+    || { echo "Homebrew update: $executable lacks a secure timestamp" >&2; exit 65; }
 done
 xcrun stapler validate "$APP"
 spctl --assess --type execute --verbose=4 "$APP"
