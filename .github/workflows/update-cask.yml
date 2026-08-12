@@ -1,0 +1,45 @@
+name: Update cask
+
+on:
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional exact Headless release version
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-headless-cask
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify release and render cask
+        env:
+          VERSION: ${{ inputs.version }}
+        run: ./scripts/update-cask.sh "$VERSION"
+      - name: Validate cask style
+        run: brew style --cask Casks/headless.rb
+      - name: Commit update
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- Casks/headless.rb; then
+            echo "Cask is already current"
+            exit 0
+          fi
+          rendered_version="$(sed -n 's/^  version "\([^"]*\)"$/\1/p' Casks/headless.rb)"
+          test -n "$rendered_version"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/headless.rb
+          git commit -m "headless $rendered_version"
+          git push origin HEAD:main
