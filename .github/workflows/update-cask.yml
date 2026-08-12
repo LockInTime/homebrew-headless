@@ -1,6 +1,10 @@
 name: Update cask
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/update-cask.yml"
+      - "scripts/update-cask.sh"
   schedule:
     - cron: "17,47 * * * *"
   workflow_dispatch:
@@ -18,7 +22,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate updater
+        run: |
+          bash -n scripts/update-cask.sh
+          shellcheck scripts/update-cask.sh
+
   update:
+    if: github.event_name != 'pull_request'
     runs-on: macos-latest
     timeout-minutes: 15
     steps:
