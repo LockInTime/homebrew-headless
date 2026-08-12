@@ -39,12 +39,25 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Verify release and render cask
+        id: render
         env:
           VERSION: ${{ inputs.version }}
-        run: ./scripts/update-cask.sh "$VERSION"
+        run: |
+          set +e
+          ./scripts/update-cask.sh "$VERSION"
+          result=$?
+          set -e
+          if [[ "$result" == 78 ]]; then
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [[ "$result" == 0 ]] || exit "$result"
+          echo "eligible=true" >> "$GITHUB_OUTPUT"
       - name: Validate cask style
+        if: steps.render.outputs.eligible == 'true'
         run: brew style --cask Casks/headless.rb
       - name: Commit update
+        if: steps.render.outputs.eligible == 'true'
         run: |
           set -euo pipefail
           if git diff --quiet -- Casks/headless.rb; then

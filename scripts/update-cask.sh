@@ -27,7 +27,10 @@ fi
 
 ASSET="Headless-${VERSION}-macos.zip"
 BASE_URL="https://github.com/$REPOSITORY/releases/download/v${VERSION}"
-curl_release "$BASE_URL/SHA256SUMS" > "$TEMP_DIRECTORY/SHA256SUMS"
+if ! curl_release "$BASE_URL/SHA256SUMS" > "$TEMP_DIRECTORY/SHA256SUMS"; then
+  echo "Homebrew update: Headless $VERSION predates the signed distribution contract; no cask update" >&2
+  exit 78
+fi
 curl_release "$BASE_URL/$ASSET" > "$TEMP_DIRECTORY/$ASSET"
 
 EXPECTED_SHA256="$(awk -v asset="$ASSET" '$2 == asset { print $1 }' "$TEMP_DIRECTORY/SHA256SUMS")"
