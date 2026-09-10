@@ -5,8 +5,9 @@ on:
     paths:
       - ".github/workflows/update-cask.yml"
       - "scripts/update-cask.sh"
+      - "scripts/test-update-cask.sh"
   schedule:
-    - cron: "17,47 * * * *"
+    - cron: "17 5 * * *"
   workflow_dispatch:
     inputs:
       version:
@@ -29,8 +30,9 @@ jobs:
       - uses: actions/checkout@v7
       - name: Validate updater
         run: |
-          bash -n scripts/update-cask.sh
-          shellcheck scripts/update-cask.sh
+          bash -n scripts/update-cask.sh scripts/test-update-cask.sh
+          shellcheck scripts/update-cask.sh scripts/test-update-cask.sh
+          ./scripts/test-update-cask.sh
 
   update:
     if: github.event_name != 'pull_request'
@@ -41,6 +43,7 @@ jobs:
       - name: Verify release and render cask
         id: render
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
         run: |
           set +e

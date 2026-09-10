@@ -9,11 +9,20 @@ TEMP_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/headless-cask-update.XXXXXX")"
 trap 'rm -rf "$TEMP_DIRECTORY"' EXIT
 
 curl_release() {
-  curl --fail --silent --show-error --location \
-    --proto '=https' --tlsv1.2 \
-    -H 'Accept: application/vnd.github+json' \
-    -H 'X-GitHub-Api-Version: 2022-11-28' \
-    "$1"
+  local curl_arguments=(
+    --fail
+    --silent
+    --show-error
+    --location
+    --proto '=https'
+    --tlsv1.2
+    --header 'Accept: application/vnd.github+json'
+    --header 'X-GitHub-Api-Version: 2022-11-28'
+  )
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    curl_arguments+=(--header "Authorization: Bearer $GITHUB_TOKEN")
+  fi
+  curl "${curl_arguments[@]}" "$@"
 }
 
 if [[ -z "$VERSION" ]]; then
@@ -27,9 +36,20 @@ fi
 
 ASSET="Headless-${VERSION}-macos.zip"
 BASE_URL="https://github.com/$REPOSITORY/releases/download/v${VERSION}"
-if ! curl_release "$BASE_URL/SHA256SUMS" > "$TEMP_DIRECTORY/SHA256SUMS"; then
+set +e
+CHECKSUM_HTTP_STATUS="$(curl_release \
+  --output "$TEMP_DIRECTORY/SHA256SUMS" \
+  --write-out '%{http_code}' \
+  "$BASE_URL/SHA256SUMS")"
+CHECKSUM_RESULT=$?
+set -e
+if [[ "$CHECKSUM_RESULT" -ne 0 && "$CHECKSUM_HTTP_STATUS" == "404" ]]; then
   echo "Homebrew update: Headless $VERSION predates the signed distribution contract; no cask update" >&2
   exit 78
+fi
+if [[ "$CHECKSUM_RESULT" -ne 0 ]]; then
+  echo "Homebrew update: failed to fetch the checksum manifest (HTTP $CHECKSUM_HTTP_STATUS)" >&2
+  exit "$CHECKSUM_RESULT"
 fi
 curl_release "$BASE_URL/$ASSET" > "$TEMP_DIRECTORY/$ASSET"
 
